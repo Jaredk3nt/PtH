@@ -1,0 +1,29 @@
+msfcli
+os library python
+os.popen for getting output of os commands
+
+nmap library for python 
+	-O -n to get the OS of the machines, parse them and return the IP's with their OS version
+
+https://pypi.python.org/pypi/pexpect
+	- Use to interact with command line applications
+
+https://github.com/allfro/pymetasploit
+	- wrapper around msfprc
+
+Run from comprimise machine to expand throughout the network
+	- run post/windows/gather/hashdump 
+	- Gather the hashes
+	- run nmap scan (on first comprimised machine)
+	- collect IP's with probable susceptible OS's
+	- run metasploit (use exploit/windows/smb/psexec)
+	- should gain meterpreter shell if machine can be comprimised
+	- repeat process
+
+Hopes:
+	- we can get hashes from the other comprimised machines onto the main machines process to add to the hash pool
+
+Possible uses
+	- getting as many hashes as possible before trying to crack hashes offline for better odds of a success, for later use in other methods
+
+
