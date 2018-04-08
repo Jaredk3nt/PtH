@@ -1,30 +1,40 @@
-"""
-This module is responsible for interaction with the nmap tool.
-"""
 import nmap
+import re
+import sys
 
-def scan(ip):
+def convertIpToRange(ip):
+	rgx = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.')
+	return rgx.match(ip).group() + '0-255'
+
+def nmScan(ip):
     targets = []
-    range = ip[:-3] + "0-255"
+    range = convertIpToRange(ip)
     nm = nmap.PortScanner()
     nm.scan(hosts=range, arguments="-O -n -p445,139")
     hosts = nm.all_hosts()
+	# For each running machine IP picked up by nmap
     for host in hosts:
+		# If they have OS information
     	if 'osmatch' in nm[host]:
-			host_obj = { 'ip': host, 'osfamily': "", 'osgen': []}
-    		for os in nm[host]['osmatch']:
-    			for c in os['osclass']:
-    				if c['osfamily'] == "Windows":
-    					if len(host_obj['osfamily']) == 0:
-    						host_obj['osfamily'] = c['osfamily']
-    					host_obj['osgen'].append(c['osgen'])
-    		if host_obj['osfamily'] == "Windows":
-    			targets.append(host_obj)
-
+            host_obj = {'ip': host, 'osfamily': "", 'osgen': []}
+			# Look through all possible OS matches
+            for os in nm[host]['osmatch']:
+                for c in os['osclass']:
+					# If the OS family is Windows add the machine to possible targets
+                    if c['osfamily'] == "Windows":
+                        if len(host_obj['osfamily']) == 0:
+                            host_obj['osfamily'] = c['osfamily']
+                        host_obj['osgen'].append(c['osgen'])
+            if host_obj['osfamily'] == "Windows":
+                targets.append(host_obj)
     return targets
 
-def get_hosts():
-    hosts = scan('10.202.208.230')
-    print(hosts)
+def main():
+	ip = sys.argv[1]
+	print(convertIpToRange(ip))
+	#target_hosts = nmScan(ip)
 
-get_hosts()
+if __name__ == "__main__":
+    # execute only if run as a script
+    main()
+
