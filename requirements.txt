@@ -1,2 +1,2 @@
 python-nmap==0.6.1
-pymetasploit
+-e git://github.com/Jaredk3nt/pymetasploit.git#egg=pymetasploit
